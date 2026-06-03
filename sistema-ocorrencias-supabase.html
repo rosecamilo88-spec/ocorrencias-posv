@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ocorrências Pós-Venda</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#ffffff;--bg2:#f7f7f5;--bg3:#f0eeea;
+  --text:#1a1a1a;--text2:#666;--text3:#999;
+  --border:rgba(0,0,0,0.1);--border2:rgba(0,0,0,0.18);
+  --blue-bg:#E6F1FB;--blue-text:#0C447C;--blue-border:#85B7EB;
+  --amber-bg:#FAEEDA;--amber-text:#633806;--amber-border:#EF9F27;
+  --green-bg:#EAF3DE;--green-text:#27500A;--green-border:#97C459;
+  --red-bg:#FCEBEB;--red-text:#791F1F;--red-border:#F09595;
+  --gray-bg:#F1EFE8;--gray-text:#444441;
+  --radius:8px;--radius-lg:12px;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;color:var(--text);background:var(--bg3);min-height:100vh}
+
+.topbar{background:var(--bg);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:56px;position:sticky;top:0;z-index:100}
+.topbar-logo{font-size:15px;font-weight:600}
+.topbar-logo span{color:#0C447C}
+.topbar-right{display:flex;align-items:center;gap:12px}
+.sync-dot{width:8px;height:8px;border-radius:50%;background:#ccc;display:inline-block;margin-right:4px;transition:.3s}
+.sync-dot.online{background:#639922}
+.sync-dot.syncing{background:#BA7517;animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.sync-label{font-size:12px;color:var(--text2)}
+
+.main{max-width:1100px;margin:0 auto;padding:20px 16px}
+.page-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;flex-wrap:wrap;gap:10px}
+.page-title{font-size:20px;font-weight:600}
+.page-sub{font-size:12px;color:var(--text2);margin-top:2px}
+
+.nav-tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:18px;overflow-x:auto}
+.nav-tab{padding:9px 16px;font-size:13px;font-weight:500;cursor:pointer;border:none;background:none;color:var(--text2);border-bottom:2px solid transparent;white-space:nowrap;font-family:inherit;transition:.15s}
+.nav-tab.active{color:var(--text);border-bottom-color:var(--text)}
+.screen{display:none}.screen.active{display:block}
+
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:18px}
+.kpi{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px}
+.kpi-val{font-size:26px;font-weight:600;line-height:1.1}
+.kpi-lbl{font-size:12px;color:var(--text2);margin-top:4px}
+.kpi-note{font-size:11px;color:var(--text3);margin-top:2px}
+
+.badge{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11px;font-weight:600;white-space:nowrap}
+.b-aberto{background:var(--blue-bg);color:var(--blue-text)}
+.b-analise{background:var(--amber-bg);color:var(--amber-text)}
+.b-resolvido{background:var(--green-bg);color:var(--green-text)}
+.b-cancelado{background:var(--gray-bg);color:var(--gray-text)}
+.b-falta{background:var(--red-bg);color:var(--red-text)}
+.b-defeito{background:var(--amber-bg);color:var(--amber-text)}
+.b-avaria{background:var(--blue-bg);color:var(--blue-text)}
+.b-devolucao{background:var(--gray-bg);color:var(--gray-text)}
+
+.tbl-wrap{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+th{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;padding:9px 12px;border-bottom:1px solid var(--border);text-align:left;background:var(--bg2);white-space:nowrap}
+td{padding:9px 12px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tbody tr:hover{background:var(--bg2);cursor:pointer}
+
+.btn{padding:8px 16px;border:1px solid var(--border2);border-radius:var(--radius);font-size:13px;font-weight:500;cursor:pointer;background:var(--bg);color:var(--text);font-family:inherit;transition:.12s;white-space:nowrap}
+.btn:hover{background:var(--bg2)}
+.btn-primary{background:var(--text);color:var(--bg);border-color:var(--text)}
+.btn-primary:hover{opacity:.85;background:var(--text)}
+.btn-sm{padding:5px 11px;font-size:12px}
+.btn-success{border-color:var(--green-border);color:var(--green-text);background:var(--green-bg)}
+.btn-danger{border-color:var(--red-border);color:var(--red-text)}
+.btn-danger:hover{background:var(--red-bg)}
+.btn-icon{border:none;background:none;cursor:pointer;padding:4px;color:var(--text2)}
+
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.filters input,.filters select{padding:7px 11px;border:1px solid var(--border2);border-radius:var(--radius);font-size:13px;background:var(--bg);color:var(--text);font-family:inherit}
+.filters input{flex:1;min-width:180px}
+
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto}
+.modal-overlay.open{display:flex}
+.modal{background:var(--bg);border-radius:var(--radius-lg);width:100%;max-width:600px;box-shadow:0 8px 32px rgba(0,0,0,.18);margin:auto}
+.modal-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start}
+.modal-head h3{font-size:16px;font-weight:600}
+.modal-head .sub{font-size:12px;color:var(--text2);margin-top:2px}
+.modal-body{padding:18px 20px;max-height:62vh;overflow-y:auto}
+.modal-foot{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
+
+.form-group{margin-bottom:10px}
+.form-group label{display:block;font-size:12px;font-weight:600;color:var(--text2);margin-bottom:3px}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:8px 11px;border:1px solid var(--border2);border-radius:var(--radius);font-size:13px;background:var(--bg);color:var(--text);font-family:inherit}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{outline:none;border-color:#0C447C;box-shadow:0 0 0 3px rgba(12,68,124,.1)}
+.form-group textarea{min-height:68px;resize:vertical}
+.form-group input.err,.form-group select.err{border-color:#E24B4A}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.sec-sep{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;padding:12px 0 7px;border-bottom:1px solid var(--border);margin-bottom:10px}
+
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.df{background:var(--bg2);border-radius:var(--radius);padding:9px 12px}
+.df label{font-size:11px;color:var(--text2);display:block;margin-bottom:2px;font-weight:500}
+.df span{font-size:13px;font-weight:500}
+
+.tl{list-style:none}
+.tl-item{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
+.tl-item:last-child{border-bottom:none}
+.tl-dot{width:8px;height:8px;border-radius:50%;margin-top:5px;flex-shrink:0}
+.dot-blue{background:#185FA5}.dot-amber{background:#BA7517}.dot-green{background:#3B6D11}.dot-gray{background:#888780}
+.tl-msg{font-size:13px}
+.tl-meta{font-size:11px;color:var(--text2);margin-top:2px}
+
+.alert-item{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:var(--radius);border:1px solid var(--border);margin-bottom:8px;gap:10px}
+.alert-item.danger{background:var(--red-bg);border-color:var(--red-border)}
+.alert-item.warning{background:var(--amber-bg);border-color:var(--amber-border)}
+.alert-item.info{background:var(--blue-bg);border-color:var(--blue-border)}
+
+.bar-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.bar-label{width:80px;font-size:12px;color:var(--text2);flex-shrink:0}
+.bar-track{flex:1;height:14px;background:var(--bg3);border-radius:3px;overflow:hidden}
+.bar-fill{height:100%;border-radius:3px;transition:.4s}
+.bar-num{font-size:12px;font-weight:600;min-width:20px;text-align:right}
+
+.card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 18px}
+.empty{text-align:center;padding:40px 20px;color:var(--text2)}
+
+.prazo-ok{color:#3B6D11}.prazo-warn{color:#854F0B}.prazo-danger{color:#A32D2D;font-weight:600}.prazo-done{color:var(--text2)}
+
+.email-preview{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;font-size:13px;line-height:1.7;white-space:pre-wrap;max-height:300px;overflow-y:auto;font-family:monospace}
+
+.loading-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;gap:16px}
+.spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:#0C447C;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.toast{position:fixed;bottom:24px;right:24px;background:#1a1a1a;color:#fff;padding:10px 18px;border-radius:var(--radius);font-size:13px;z-index:999;opacity:0;transition:.3s;pointer-events:none}
+.toast.show{opacity:1}
+.toast.success{background:#1E8449}
+.toast.error{background:#A32D2D}
+
+.realtime-badge{display:inline-flex;align-items:center;gap:5px;background:var(--green-bg);color:var(--green-text);padding:3px 10px;border-radius:99px;font-size:11px;font-weight:600}
+
+@media(max-width:640px){
+  .grid-2,.grid-3{grid-template-columns:1fr}
+  .detail-grid{grid-template-columns:1fr}
+  .kpi-grid{grid-template-columns:repeat(2,1fr)}
+  .main{padding:12px 10px}
+  th,td{padding:7px 8px;font-size:12px}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-logo">Pós-Venda <span>Ocorrências</span></div>
+  <div class="topbar-right">
+    <span id="sync-indicator">
+      <span class="sync-dot" id="sync-dot"></span>
+      <span class="sync-label" id="sync-label">Conectando...</span>
+    </span>
+    <span id="realtime-badge" class="realtime-badge" style="display:none">
+      ● Tempo real
+    </span>
+    <button class="btn btn-primary btn-sm" onclick="openModal('modal-nova')">+ Nova ocorrência</button>
+  </div>
+</div>
+
+<div class="main">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Central de Ocorrências</div>
+      <div class="page-sub" id="last-update">Carregando...</div>
+    </div>
+  </div>
+
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="goTo('dashboard',this)">Dashboard</button>
+    <button class="nav-tab" onclick="goTo('lista',this)">Ocorrências <span id="badge-lista"></span></button>
+    <button class="nav-tab" onclick="goTo('alertas',this)">Alertas <span id="badge-alertas"></span></button>
+    <button class="nav-tab" onclick="goTo('relatorio',this)">Relatório</button>
+  </div>
+
+  <div id="screen-dashboard" class="screen active">
+    <div class="kpi-grid" id="kpis"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px">
+      <div class="card">
+        <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px">Por tipo</div>
+        <div id="chart-tipo"></div>
+      </div>
+      <div class="card">
+        <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px">Por status</div>
+        <div id="chart-status"></div>
+      </div>
+    </div>
+    <div style="font-size:13px;font-weight:600;margin-bottom:10px">Ocorrências recentes</div>
+    <div class="tbl-wrap" id="dash-recentes"></div>
+  </div>
+
+  <div id="screen-lista" class="screen">
+    <div class="filters">
+      <input type="text" id="f-search" placeholder="Buscar protocolo, cliente, produto..." oninput="renderLista()">
+      <select id="f-tipo" onchange="renderLista()">
+        <option value="">Todos os tipos</option>
+        <option value="falta">Falta física</option>
+        <option value="defeito">Defeito</option>
+        <option value="avaria">Avaria</option>
+        <option value="devolucao">Devolução</option>
+      </select>
+      <select id="f-status" onchange="renderLista()">
+        <option value="">Todos os status</option>
+        <option value="aberto">Aberto</option>
+        <option value="analise">Em análise</option>
+        <option value="resolvido">Resolvido</option>
+        <option value="cancelado">Cancelado</option>
+      </select>
+      <select id="f-vendedor" onchange="renderLista()">
+        <option value="">Todos os vendedores</option>
+      </select>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th>Protocolo</th><th>Cliente</th><th>Tipo</th><th>Status</th>
+          <th>Vendedor</th><th>Prazo</th><th>Abertura</th><th></th>
+        </tr></thead>
+        <tbody id="lista-body"></tbody>
+      </table>
+    </div>
+    <div id="lista-empty" class="empty" style="display:none">Nenhuma ocorrência encontrada</div>
+  </div>
+
+  <div id="screen-alertas" class="screen">
+    <div style="font-size:13px;color:var(--text2);margin-bottom:14px">Ocorrências que requerem atenção imediata.</div>
+    <div id="alertas-list"></div>
+  </div>
+
+  <div id="screen-relatorio" class="screen">
+    <div class="filters" style="margin-bottom:16px">
+      <select id="rel-periodo" onchange="renderRelatorio()">
+        <option value="7">Últimos 7 dias</option>
+        <option value="30" selected>Últimos 30 dias</option>
+        <option value="90">Últimos 90 dias</option>
+        <option value="0">Todos</option>
+      </select>
+      <button class="btn" onclick="exportarCSV()">⬇ Exportar CSV</button>
+    </div>
+    <div class="kpi-grid" id="rel-kpis" style="grid-template-columns:repeat(3,1fr)"></div>
+    <div id="rel-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:4px"></div>
+  </div>
+</div>
+
+<!-- MODAL NOVA -->
+<div class="modal-overlay" id="modal-nova">
+<div class="modal">
+  <div class="modal-head">
+    <div><h3>Nova ocorrência</h3><div class="sub">Campos com * são obrigatórios</div></div>
+    <button class="btn-icon" onclick="closeModal('modal-nova')">✕</button>
+  </div>
+  <div class="modal-body">
+    <div class="sec-sep">Dados do cliente</div>
+    <div class="grid-2">
+      <div class="form-group"><label>CNPJ *</label><input id="n-cnpj" placeholder="00.000.000/0001-00"></div>
+      <div class="form-group"><label>Razão social *</label><input id="n-razao" placeholder="Nome da empresa"></div>
+    </div>
+    <div class="grid-3">
+      <div class="form-group"><label>Nº Pedido *</label><input id="n-pedido" placeholder="PED-00000"></div>
+      <div class="form-group"><label>Nota Fiscal *</label><input id="n-nf" placeholder="NF-000000"></div>
+      <div class="form-group"><label>Data de entrega</label><input type="date" id="n-dtent"></div>
+    </div>
+    <div class="sec-sep">Ocorrência</div>
+    <div class="grid-2">
+      <div class="form-group"><label>Tipo *</label>
+        <select id="n-tipo" onchange="updateCamposNova()">
+          <option value="">— selecione —</option>
+          <option value="falta">Falta física</option>
+          <option value="defeito">Defeito / vício</option>
+          <option value="avaria">Avaria no transporte</option>
+          <option value="devolucao">Devolução comercial</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Vendedor responsável *</label><input id="n-vendedor" placeholder="Nome do vendedor"></div>
+    </div>
+    <div id="campos-tipo-extra"></div>
+    <div class="form-group"><label>Produto(s) afetado(s) *</label><input id="n-produto" placeholder="Ex: Produto ABC — 3 unidades"></div>
+    <div class="form-group"><label>Descrição detalhada *</label><textarea id="n-desc" placeholder="Relato completo da reclamação..."></textarea></div>
+    <div class="grid-2">
+      <div class="form-group"><label>Ação solicitada</label>
+        <select id="n-acao">
+          <option value="">— selecione —</option>
+          <option>Reenvio do produto</option>
+          <option>Nota de crédito / abatimento</option>
+          <option>Substituição por equivalente</option>
+          <option>Devolução e estorno</option>
+          <option>Aguardando análise</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Evidências</label>
+        <select id="n-evidencia">
+          <option value="">— selecione —</option>
+          <option>Fotos por WhatsApp</option>
+          <option>Fotos por e-mail</option>
+          <option>Ressalva na NF</option>
+          <option>Sem evidências — somente relato</option>
+        </select>
+      </div>
+    </div>
+  </div>
+  <div class="modal-foot">
+    <button class="btn" onclick="closeModal('modal-nova')">Cancelar</button>
+    <button class="btn btn-primary" id="btn-salvar" onclick="salvarNova()">Registrar ocorrência</button>
+  </div>
+</div>
+</div>
+
+<!-- MODAL DETALHE -->
+<div class="modal-overlay" id="modal-detalhe">
+<div class="modal" style="max-width:660px">
+  <div class="modal-head">
+    <div><h3 id="d-id"></h3><div class="sub" id="d-sub"></div></div>
+    <button class="btn-icon" onclick="closeModal('modal-detalhe')">✕</button>
+  </div>
+  <div class="modal-body">
+    <div class="detail-grid" id="d-fields"></div>
+    <div id="d-desc-box" style="background:var(--bg2);border-radius:var(--radius);padding:10px 12px;margin-bottom:12px;font-size:13px;line-height:1.6"></div>
+    <div class="sec-sep">Ações rápidas</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px" id="d-acoes"></div>
+    <div class="sec-sep">Histórico</div>
+    <ul class="tl" id="d-timeline"></ul>
+    <div class="sec-sep" style="margin-top:12px">Registrar movimentação</div>
+    <div class="form-group"><textarea id="d-nota" placeholder="Ação tomada, contato com cliente, resultado de análise..."></textarea></div>
+    <div class="grid-2">
+      <div class="form-group"><label>Alterar status</label>
+        <select id="d-novo-status">
+          <option value="">Manter status atual</option>
+          <option value="analise">→ Em análise</option>
+          <option value="resolvido">→ Resolvido</option>
+          <option value="cancelado">→ Cancelado</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Registrado por</label>
+        <input id="d-autor" placeholder="Seu nome">
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="addMovimentacao()" style="width:100%">Registrar movimentação</button>
+  </div>
+  <div class="modal-foot">
+    <button class="btn btn-danger btn-sm" onclick="excluirOcorrencia()">Excluir</button>
+    <button class="btn btn-sm" onclick="gerarEmailCliente()">✉ E-mail cliente</button>
+    <button class="btn btn-sm" onclick="gerarEmailInterno()">✉ E-mail interno</button>
+    <button class="btn" onclick="closeModal('modal-detalhe')">Fechar</button>
+  </div>
+</div>
+</div>
+
+<!-- MODAL EMAIL -->
+<div class="modal-overlay" id="modal-email">
+<div class="modal">
+  <div class="modal-head">
+    <h3 id="email-titulo">E-mail gerado</h3>
+    <button class="btn-icon" onclick="closeModal('modal-email')">✕</button>
+  </div>
+  <div class="modal-body">
+    <div class="form-group"><label>Assunto</label><input id="email-assunto" readonly></div>
+    <div class="form-group"><label>Corpo</label><div class="email-preview" id="email-corpo"></div></div>
+  </div>
+  <div class="modal-foot">
+    <button class="btn" onclick="copiarEmail()">Copiar</button>
+    <button class="btn" onclick="closeModal('modal-email')">Fechar</button>
+  </div>
+</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── SUPABASE CONFIG ───────────────────────────────────────
+const SUPABASE_URL = 'https://vcojfnaxejykgngfhrcm.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_s4IjuKz4unK6jcKIakmX1g_UPngSLDV';
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ─── STATE ─────────────────────────────────────────────────
+let ocorrencias = [];
+let currentId = null;
+let realtimeChannel = null;
+let seq = 1000;
+
+const TIPO_LABELS = {falta:'Falta física',defeito:'Defeito',avaria:'Avaria',devolucao:'Devolução'};
+const TIPO_PRAZOS = {falta:2,defeito:3,avaria:2,devolucao:2};
+const STATUS_LABELS = {aberto:'Aberto',analise:'Em análise',resolvido:'Resolvido',cancelado:'Cancelado'};
+const TIPO_COLORS = {falta:'#E24B4A',defeito:'#BA7517',avaria:'#185FA5',devolucao:'#888780'};
+const STATUS_COLORS = {aberto:'#185FA5',analise:'#BA7517',resolvido:'#3B6D11',cancelado:'#888780'};
+
+// ─── SUPABASE: INIT TABLE ──────────────────────────────────
+async function ensureTable() {
+  // Try inserting a test to see if table exists; if not, we catch and guide user
+  const { error } = await sb.from('ocorrencias').select('id').limit(1);
+  if (error && error.code === '42P01') {
+    // Table doesn't exist — show setup instructions
+    document.getElementById('last-update').textContent = '⚠ Tabela não encontrada — veja instruções abaixo';
+    showToast('Tabela não encontrada no Supabase. Consulte as instruções de setup.', 'error', 6000);
+    return false;
+  }
+  return true;
+}
+
+// ─── SUPABASE: LOAD ────────────────────────────────────────
+async function loadOcorrencias() {
+  setSyncStatus('syncing', 'Carregando...');
+  const ok = await ensureTable();
+  if (!ok) { setSyncStatus('offline', 'Erro na tabela'); return; }
+
+  const { data, error } = await sb
+    .from('ocorrencias')
+    .select('*')
+    .order('criado_em', { ascending: false });
+
+  if (error) {
+    console.error(error);
+    setSyncStatus('offline', 'Erro ao carregar');
+    showToast('Erro ao carregar ocorrências: ' + error.message, 'error');
+    return;
+  }
+
+  ocorrencias = data || [];
+  // update seq
+  ocorrencias.forEach(o => {
+    const n = parseInt((o.protocolo || '').split('-')[2]);
+    if (!isNaN(n) && n > seq) seq = n;
+  });
+
+  setSyncStatus('online', 'Conectado · ' + new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}));
+  document.getElementById('last-update').textContent = 'Sincronizado em tempo real · ' + ocorrencias.length + ' ocorrência(s)';
+  render();
+  setupRealtime();
+}
+
+// ─── SUPABASE: REALTIME ────────────────────────────────────
+function setupRealtime() {
+  if (realtimeChannel) sb.removeChannel(realtimeChannel);
+
+  realtimeChannel = sb
+    .channel('ocorrencias-realtime')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'ocorrencias' }, payload => {
+      setSyncStatus('syncing', 'Sincronizando...');
+      handleRealtimeEvent(payload);
+    })
+    .subscribe(status => {
+      if (status === 'SUBSCRIBED') {
+        document.getElementById('realtime-badge').style.display = 'inline-flex';
+        setSyncStatus('online', 'Tempo real ativo');
+      }
+    });
+}
+
+function handleRealtimeEvent(payload) {
+  const { eventType, new: novo, old: antigo } = payload;
+
+  if (eventType === 'INSERT') {
+    // Avoid duplicate if we just inserted it
+    if (!ocorrencias.find(o => o.id === novo.id)) {
+      ocorrencias.unshift(novo);
+      showToast('Nova ocorrência registrada: ' + novo.protocolo, 'success');
+    }
+  } else if (eventType === 'UPDATE') {
+    const idx = ocorrencias.findIndex(o => o.id === novo.id);
+    if (idx >= 0) ocorrencias[idx] = novo;
+    else ocorrencias.unshift(novo);
+    // If detalhe modal is open for this record, refresh it
+    if (currentId === novo.id) openDetalhe(novo.id);
+    showToast('Ocorrência atualizada: ' + novo.protocolo);
+  } else if (eventType === 'DELETE') {
+    ocorrencias = ocorrencias.filter(o => o.id !== antigo.id);
+    showToast('Ocorrência removida');
+  }
+
+  setSyncStatus('online', 'Sincronizado · ' + new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}));
+  document.getElementById('last-update').textContent = 'Sincronizado em tempo real · ' + ocorrencias.length + ' ocorrência(s)';
+  render();
+}
+
+// ─── SUPABASE: INSERT ──────────────────────────────────────
+async function insertOcorrencia(oc) {
+  const { data, error } = await sb.from('ocorrencias').insert([oc]).select().single();
+  if (error) throw error;
+  return data;
+}
+
+// ─── SUPABASE: UPDATE ──────────────────────────────────────
+async function updateOcorrencia(id, changes) {
+  const { error } = await sb.from('ocorrencias').update(changes).eq('id', id);
+  if (error) throw error;
+}
+
+// ─── SUPABASE: DELETE ──────────────────────────────────────
+async function deleteOcorrencia(id) {
+  const { error } = await sb.from('ocorrencias').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ─── HELPERS ───────────────────────────────────────────────
+function setSyncStatus(state, label) {
+  const dot = document.getElementById('sync-dot');
+  const lbl = document.getElementById('sync-label');
+  dot.className = 'sync-dot ' + state;
+  lbl.textContent = label;
+}
+
+function showToast(msg, type = '', duration = 3000) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', duration);
+}
+
+function prazoInfo(oc) {
+  if (oc.status === 'resolvido' || oc.status === 'cancelado') return {label:'—',pct:100,cls:'prazo-done',vencida:false};
+  const prazo = TIPO_PRAZOS[oc.tipo] || 2;
+  const limit = new Date(oc.criado_em);
+  let d = 0;
+  while (d < prazo) { limit.setDate(limit.getDate()+1); if(limit.getDay()!==0&&limit.getDay()!==6) d++; }
+  const now = Date.now();
+  const total = limit - new Date(oc.criado_em);
+  const elapsed = now - new Date(oc.criado_em);
+  const pct = Math.min(100, Math.round(elapsed/total*100));
+  const diffDias = Math.ceil((limit - now)/86400000);
+  const vencida = diffDias < 0;
+  let label, cls;
+  if (vencida) { label = 'Vencida'; cls = 'prazo-danger'; }
+  else if (diffDias === 0) { label = 'Vence hoje'; cls = 'prazo-warn'; }
+  else if (diffDias === 1) { label = '1 dia'; cls = 'prazo-warn'; }
+  else { label = diffDias + ' dias'; cls = 'prazo-ok'; }
+  return {label, pct, cls, vencida, diffDias};
+}
+
+function fmtDate(iso, opts) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (opts === 'short') return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+  return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'}) + ' ' + d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+}
+
+function tbadge(tipo) { return `<span class="badge b-${tipo}">${TIPO_LABELS[tipo]||tipo}</span>`; }
+function sbadge(status) { return `<span class="badge b-${status}">${STATUS_LABELS[status]||status}</span>`; }
+
+function gerarProtocolo() {
+  seq++;
+  return `OC-${new Date().getFullYear()}-${String(seq).padStart(4,'0')}`;
+}
+
+// ─── RENDER ────────────────────────────────────────────────
+function render() {
+  renderKPIs();
+  renderCharts();
+  renderDashRecentes();
+  renderLista();
+  renderAlertas();
+  renderRelatorio();
+  updateBadges();
+  populateVendedorFilter();
+}
+
+function renderKPIs() {
+  const total = ocorrencias.length;
+  const abertas = ocorrencias.filter(o=>o.status==='aberto'||o.status==='analise').length;
+  const vencidas = ocorrencias.filter(o=>prazoInfo(o).vencida).length;
+  const resolvidas = ocorrencias.filter(o=>o.status==='resolvido').length;
+  const pct = total ? Math.round(resolvidas/total*100)+'%' : '—';
+  const tmts = ocorrencias.filter(o=>o.status==='resolvido').map(o => {
+    const tl = o.timeline || [];
+    if (!tl.length) return 0;
+    return (new Date(tl[tl.length-1].ts) - new Date(o.criado_em)) / 86400000;
+  });
+  const tmtM = tmts.length ? (tmts.reduce((a,b)=>a+b,0)/tmts.length).toFixed(1) : '—';
+  document.getElementById('kpis').innerHTML = `
+    <div class="kpi"><div class="kpi-val">${total}</div><div class="kpi-lbl">Total</div></div>
+    <div class="kpi"><div class="kpi-val" style="color:${abertas>0?'#854F0B':'#3B6D11'}">${abertas}</div><div class="kpi-lbl">Em aberto</div></div>
+    <div class="kpi"><div class="kpi-val" style="color:${vencidas>0?'#A32D2D':'#3B6D11'}">${vencidas}</div><div class="kpi-lbl">Vencidas</div></div>
+    <div class="kpi"><div class="kpi-val">${pct}</div><div class="kpi-lbl">Taxa resolução</div></div>
+    <div class="kpi"><div class="kpi-val">${tmtM}</div><div class="kpi-lbl">TMR médio (dias)</div></div>
+  `;
+}
+
+function renderCharts() {
+  const tipos = ['falta','defeito','avaria','devolucao'];
+  const max1 = Math.max(...tipos.map(t=>ocorrencias.filter(o=>o.tipo===t).length), 1);
+  document.getElementById('chart-tipo').innerHTML = tipos.map(t => {
+    const n = ocorrencias.filter(o=>o.tipo===t).length;
+    return `<div class="bar-row"><div class="bar-label">${TIPO_LABELS[t]}</div><div class="bar-track"><div class="bar-fill" style="width:${Math.round(n/max1*100)}%;background:${TIPO_COLORS[t]}"></div></div><div class="bar-num">${n}</div></div>`;
+  }).join('');
+  const statuses = ['aberto','analise','resolvido','cancelado'];
+  const max2 = Math.max(...statuses.map(s=>ocorrencias.filter(o=>o.status===s).length), 1);
+  document.getElementById('chart-status').innerHTML = statuses.map(s => {
+    const n = ocorrencias.filter(o=>o.status===s).length;
+    return `<div class="bar-row"><div class="bar-label">${STATUS_LABELS[s]}</div><div class="bar-track"><div class="bar-fill" style="width:${Math.round(n/max2*100)}%;background:${STATUS_COLORS[s]}"></div></div><div class="bar-num">${n}</div></div>`;
+  }).join('');
+}
+
+function renderDashRecentes() {
+  const ocs = ocorrencias.slice(0, 6);
+  if (!ocs.length) { document.getElementById('dash-recentes').innerHTML = '<div class="empty">Nenhuma ocorrência registrada ainda</div>'; return; }
+  document.getElementById('dash-recentes').innerHTML = `<table><thead><tr><th>Protocolo</th><th>Cliente</th><th>Tipo</th><th>Status</th><th>Vendedor</th><th>Prazo</th></tr></thead><tbody>` +
+    ocs.map(o => { const p = prazoInfo(o); return `<tr onclick="openDetalhe('${o.id}')"><td><strong>${o.protocolo}</strong></td><td>${(o.razao_social||'').slice(0,22)}</td><td>${tbadge(o.tipo)}</td><td>${sbadge(o.status)}</td><td>${(o.vendedor||'').split(' ')[0]}</td><td class="${p.cls}">${p.label}</td></tr>`; }).join('') + `</tbody></table>`;
+}
+
+function renderLista() {
+  const search = (document.getElementById('f-search')||{value:''}).value.toLowerCase();
+  const fTipo  = (document.getElementById('f-tipo')||{value:''}).value;
+  const fSt    = (document.getElementById('f-status')||{value:''}).value;
+  const fVend  = (document.getElementById('f-vendedor')||{value:''}).value;
+  let ocs = [...ocorrencias];
+  if (search) ocs = ocs.filter(o=>[o.protocolo,o.razao_social,o.produto,o.pedido,o.nf,o.vendedor].join(' ').toLowerCase().includes(search));
+  if (fTipo) ocs = ocs.filter(o=>o.tipo===fTipo);
+  if (fSt)   ocs = ocs.filter(o=>o.status===fSt);
+  if (fVend) ocs = ocs.filter(o=>o.vendedor===fVend);
+  const body  = document.getElementById('lista-body');
+  const empty = document.getElementById('lista-empty');
+  if (!ocs.length) { body.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+  body.innerHTML = ocs.map(o => {
+    const p = prazoInfo(o);
+    return `<tr onclick="openDetalhe('${o.id}')">
+      <td><strong>${o.protocolo}</strong></td>
+      <td>${(o.razao_social||'').slice(0,22)}</td>
+      <td>${tbadge(o.tipo)}</td>
+      <td>${sbadge(o.status)}</td>
+      <td>${o.vendedor||''}</td>
+      <td class="${p.cls}">${p.label}</td>
+      <td>${fmtDate(o.criado_em,'short')}</td>
+      <td><button class="btn btn-sm" onclick="event.stopPropagation();openDetalhe('${o.id}')">Abrir</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function populateVendedorFilter() {
+  const sel = document.getElementById('f-vendedor');
+  if (!sel) return;
+  const cur = sel.value;
+  const vs = [...new Set(ocorrencias.map(o=>o.vendedor).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">Todos os vendedores</option>' + vs.map(v=>`<option value="${v}"${v===cur?' selected':''}>${v}</option>`).join('');
+}
+
+function renderAlertas() {
+  const vencidas  = ocorrencias.filter(o=>prazoInfo(o).vencida);
+  const hoje      = ocorrencias.filter(o=>{ const p=prazoInfo(o); return !p.vencida && p.diffDias===0; });
+  const semFoto   = ocorrencias.filter(o=>(o.tipo==='defeito'||o.tipo==='avaria') && o.evidencia==='Sem evidências — somente relato' && (o.status==='aberto'||o.status==='analise'));
+  let html = '';
+  if (!vencidas.length && !hoje.length && !semFoto.length) {
+    html = '<div class="empty">✓ Nenhum alerta no momento. Tudo em dia!</div>';
+  }
+  vencidas.forEach(o=>{ html+=`<div class="alert-item danger"><div><div style="font-weight:600">${o.protocolo} — ${o.razao_social}</div><div style="font-size:12px;margin-top:2px;opacity:.8">Prazo vencido · ${TIPO_LABELS[o.tipo]} · ${o.vendedor}</div></div><button class="btn btn-sm" onclick="openDetalhe('${o.id}')">Abrir</button></div>`; });
+  hoje.forEach(o=>{ html+=`<div class="alert-item warning"><div><div style="font-weight:600">${o.protocolo} — ${o.razao_social}</div><div style="font-size:12px;margin-top:2px;opacity:.8">Vence hoje · ${TIPO_LABELS[o.tipo]} · ${o.vendedor}</div></div><button class="btn btn-sm" onclick="openDetalhe('${o.id}')">Abrir</button></div>`; });
+  semFoto.forEach(o=>{ html+=`<div class="alert-item info"><div><div style="font-weight:600">${o.protocolo} — ${o.razao_social}</div><div style="font-size:12px;margin-top:2px;opacity:.8">Sem evidências fotográficas · ${TIPO_LABELS[o.tipo]}</div></div><button class="btn btn-sm" onclick="openDetalhe('${o.id}')">Abrir</button></div>`; });
+  document.getElementById('alertas-list').innerHTML = html;
+}
+
+function updateBadges() {
+  const v  = ocorrencias.filter(o=>prazoInfo(o).vencida).length;
+  const ab = ocorrencias.filter(o=>o.status==='aberto'||o.status==='analise').length;
+  const bl = document.getElementById('badge-lista');
+  const ba = document.getElementById('badge-alertas');
+  if (bl) bl.innerHTML = ab>0 ? `<span style="background:#185FA5;color:#fff;border-radius:99px;padding:1px 7px;font-size:10px;margin-left:4px">${ab}</span>` : '';
+  if (ba) ba.innerHTML = v>0  ? `<span style="background:#E24B4A;color:#fff;border-radius:99px;padding:1px 7px;font-size:10px;margin-left:4px">${v}</span>` : '';
+}
+
+function renderRelatorio() {
+  const dias = parseInt((document.getElementById('rel-periodo')||{value:'30'}).value)||99999;
+  const cutoff = dias===0 ? 0 : Date.now() - dias*86400000;
+  const ocs = ocorrencias.filter(o => new Date(o.criado_em) >= cutoff || dias===0);
+  const total = ocs.length, res = ocs.filter(o=>o.status==='resolvido').length;
+  const tmts = ocs.filter(o=>o.status==='resolvido').map(o=>{ const tl=o.timeline||[]; return tl.length?(new Date(tl[tl.length-1].ts)-new Date(o.criado_em))/86400000:0; });
+  const tmtM = tmts.length ? (tmts.reduce((a,b)=>a+b,0)/tmts.length).toFixed(1) : '—';
+  document.getElementById('rel-kpis').innerHTML = `
+    <div class="kpi"><div class="kpi-val">${total}</div><div class="kpi-lbl">No período</div></div>
+    <div class="kpi"><div class="kpi-val">${res}</div><div class="kpi-lbl">Resolvidas</div></div>
+    <div class="kpi"><div class="kpi-val">${tmtM}</div><div class="kpi-lbl">TMR médio (dias)</div></div>
+  `;
+  const byTipo = ['falta','defeito','avaria','devolucao'].map(t=>{ const n=ocs.filter(o=>o.tipo===t).length; return n?`<tr><td>${TIPO_LABELS[t]}</td><td>${n}</td><td>${total?Math.round(n/total*100):0}%</td></tr>`:''; }).join('');
+  const byVend = {};
+  ocs.forEach(o=>{ byVend[o.vendedor]=(byVend[o.vendedor]||0)+1; });
+  const vendRows = Object.entries(byVend).sort((a,b)=>b[1]-a[1]).map(([v,n])=>`<tr><td>${v}</td><td style="text-align:center">${n}</td></tr>`).join('');
+  document.getElementById('rel-body').innerHTML = `
+    <div class="tbl-wrap"><table><thead><tr><th>Tipo</th><th>Qtd</th><th>%</th></tr></thead><tbody>${byTipo||'<tr><td colspan=3 style="text-align:center;padding:12px;color:var(--text2)">Sem dados</td></tr>'}</tbody></table></div>
+    <div class="tbl-wrap"><table><thead><tr><th>Vendedor</th><th style="text-align:center">Ocorrências</th></tr></thead><tbody>${vendRows||'<tr><td colspan=2 style="text-align:center;padding:12px;color:var(--text2)">Sem dados</td></tr>'}</tbody></table></div>
+  `;
+}
+
+function exportarCSV() {
+  const header = ['Protocolo','Cliente','CNPJ','Pedido','NF','Tipo','Status','Produto','Vendedor','Ação','Evidência','Criado','Prazo'];
+  const rows = ocorrencias.map(o=>[o.protocolo,o.razao_social,o.cnpj,o.pedido,o.nf,TIPO_LABELS[o.tipo],STATUS_LABELS[o.status],o.produto,o.vendedor,o.acao||'',o.evidencia||'',fmtDate(o.criado_em),prazoInfo(o).label]);
+  const csv = [header,...rows].map(r=>r.map(v=>'"'+(v||'').replace(/"/g,'""')+'"').join(',')).join('\n');
+  const blob = new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download='ocorrencias_'+new Date().toISOString().slice(0,10)+'.csv'; a.click(); URL.revokeObjectURL(url);
+}
+
+// ─── MODALS ────────────────────────────────────────────────
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function updateCamposNova() {
+  const tipo = document.getElementById('n-tipo').value;
+  const map = {
+    falta:`<div class="grid-2"><div class="form-group"><label>Qtd pedida</label><input id="n-qtdp" placeholder="ex: 15 caixas"></div><div class="form-group"><label>Qtd recebida</label><input id="n-qtdr" placeholder="ex: 10 caixas"></div></div>`,
+    defeito:`<div class="grid-2"><div class="form-group"><label>Produto durável?</label><select id="n-dur"><option>Durável — prazo 90 dias</option><option>Não durável — prazo 30 dias</option></select></div><div class="form-group"><label>Lote / nº de série</label><input id="n-lote" placeholder="Lote: XXXXX"></div></div>`,
+    avaria:`<div class="form-group"><label>Ressalva na NF?</label><select id="n-ressalva"><option>Sim</option><option>Não</option><option>Não sabe informar</option></select></div>`,
+    devolucao:`<div class="form-group"><label>Motivo</label><select id="n-motdev"><option>Produto errado pedido pelo cliente</option><option>Produto errado enviado pela empresa</option><option>Excesso de estoque</option><option>Outro</option></select></div>`
+  };
+  document.getElementById('campos-tipo-extra').innerHTML = map[tipo]||'';
+}
+
+async function salvarNova() {
+  const required = ['n-cnpj','n-razao','n-pedido','n-nf','n-tipo','n-vendedor','n-produto','n-desc'];
+  let ok = true;
+  required.forEach(id=>{ const el=document.getElementById(id); if(!el||!el.value.trim()){if(el)el.classList.add('err');ok=false;}else if(el)el.classList.remove('err'); });
+  if (!ok) { showToast('Preencha todos os campos obrigatórios', 'error'); return; }
+
+  const btn = document.getElementById('btn-salvar');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+
+  const protocolo = gerarProtocolo();
+  const now = new Date().toISOString();
+  const vendedor = document.getElementById('n-vendedor').value.trim();
+
+  const oc = {
+    protocolo,
+    razao_social: document.getElementById('n-razao').value.trim(),
+    cnpj: document.getElementById('n-cnpj').value.trim(),
+    pedido: document.getElementById('n-pedido').value.trim(),
+    nf: document.getElementById('n-nf').value.trim(),
+    data_entrega: document.getElementById('n-dtent').value || null,
+    tipo: document.getElementById('n-tipo').value,
+    vendedor,
+    produto: document.getElementById('n-produto').value.trim(),
+    descricao: document.getElementById('n-desc').value.trim(),
+    acao: document.getElementById('n-acao').value || null,
+    evidencia: document.getElementById('n-evidencia').value || null,
+    status: 'aberto',
+    ad: null,
+    timeline: [{ ts: now, msg: `Ocorrência registrada pelo vendedor ${vendedor}.`, autor: vendedor, cor: 'dot-blue' }]
+  };
+
+  try {
+    const saved = await insertOcorrencia(oc);
+    ocorrencias.unshift(saved);
+    closeModal('modal-nova');
+    // Reset form
+    ['n-cnpj','n-razao','n-pedido','n-nf','n-vendedor','n-produto','n-desc'].forEach(id=>{ const el=document.getElementById(id); if(el)el.value=''; });
+    document.getElementById('n-tipo').selectedIndex=0;
+    document.getElementById('campos-tipo-extra').innerHTML='';
+    render();
+    showToast('Ocorrência ' + protocolo + ' registrada!', 'success');
+    setTimeout(()=>openDetalhe(saved.id), 400);
+  } catch(e) {
+    showToast('Erro ao salvar: ' + e.message, 'error');
+    console.error(e);
+  } finally {
+    btn.disabled=false; btn.textContent='Registrar ocorrência';
+  }
+}
+
+function openDetalhe(id) {
+  currentId = id;
+  const oc = ocorrencias.find(o=>o.id===id);
+  if (!oc) return;
+  const p = prazoInfo(oc);
+  document.getElementById('d-id').textContent = oc.protocolo;
+  document.getElementById('d-sub').innerHTML = `${tbadge(oc.tipo)} ${sbadge(oc.status)} &nbsp;·&nbsp; ${oc.razao_social}`;
+  document.getElementById('d-fields').innerHTML = `
+    <div class="df"><label>Cliente</label><span>${oc.razao_social}</span></div>
+    <div class="df"><label>CNPJ</label><span>${oc.cnpj}</span></div>
+    <div class="df"><label>Pedido</label><span>${oc.pedido}</span></div>
+    <div class="df"><label>Nota Fiscal</label><span>${oc.nf}</span></div>
+    <div class="df"><label>Produto(s)</label><span>${oc.produto}</span></div>
+    <div class="df"><label>Vendedor</label><span>${oc.vendedor}</span></div>
+    <div class="df"><label>Ação solicitada</label><span>${oc.acao||'—'}</span></div>
+    <div class="df"><label>Evidências</label><span>${oc.evidencia||'—'}</span></div>
+    <div class="df"><label>Prazo</label><span class="${p.cls}">${p.label}</span></div>
+    <div class="df"><label>Abertura</label><span>${fmtDate(oc.criado_em)}</span></div>
+    ${oc.ad?`<div class="df" style="grid-column:span 2"><label>Autorização de Devolução</label><span>${oc.ad}</span></div>`:''}
+  `;
+  document.getElementById('d-desc-box').innerHTML = `<strong style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px">DESCRIÇÃO</strong>${oc.descricao||''}`;
+  const isOpen = oc.status==='aberto'||oc.status==='analise';
+  document.getElementById('d-acoes').innerHTML = isOpen ? `
+    <button class="btn btn-sm" onclick="mudarStatus('analise')">→ Em análise</button>
+    <button class="btn btn-sm" onclick="emitirAD()">Emitir AD</button>
+    <button class="btn btn-success btn-sm" onclick="mudarStatus('resolvido')">✓ Marcar resolvido</button>
+  ` : `<span style="font-size:12px;color:var(--text2)">Encerrada — ${STATUS_LABELS[oc.status]}</span>`;
+  const tl = oc.timeline || [];
+  document.getElementById('d-timeline').innerHTML = tl.map(t=>`
+    <li class="tl-item">
+      <div class="tl-dot ${t.cor}"></div>
+      <div style="flex:1"><div class="tl-msg">${t.msg}</div><div class="tl-meta">${t.autor} · ${fmtDate(t.ts)}</div></div>
+    </li>`).join('') || '<li style="padding:8px 0;color:var(--text2);font-size:13px">Sem movimentações registradas.</li>';
+  document.getElementById('d-nota').value='';
+  document.getElementById('d-novo-status').selectedIndex=0;
+  openModal('modal-detalhe');
+}
+
+async function mudarStatus(novoStatus) {
+  const oc = ocorrencias.find(o=>o.id===currentId);
+  if (!oc) return;
+  const old = STATUS_LABELS[oc.status];
+  const tl = [...(oc.timeline||[]), { ts: new Date().toISOString(), msg: `Status: ${old} → ${STATUS_LABELS[novoStatus]}.`, autor: 'Sistema', cor: novoStatus==='resolvido'?'dot-green':novoStatus==='cancelado'?'dot-gray':'dot-amber' }];
+  try {
+    await updateOcorrencia(oc.id, { status: novoStatus, timeline: tl });
+    oc.status = novoStatus; oc.timeline = tl;
+    render(); openDetalhe(currentId);
+    showToast('Status atualizado', 'success');
+  } catch(e) { showToast('Erro: '+e.message,'error'); }
+}
+
+async function emitirAD() {
+  const oc = ocorrencias.find(o=>o.id===currentId);
+  if (!oc) return;
+  const ad = 'AD-'+new Date().getFullYear()+'-'+String(Math.floor(Math.random()*9000+1000));
+  const tl = [...(oc.timeline||[]), { ts: new Date().toISOString(), msg: `Autorização de Devolução emitida: ${ad}.`, autor: 'Analista', cor: 'dot-amber' }];
+  try {
+    await updateOcorrencia(oc.id, { ad, timeline: tl });
+    oc.ad = ad; oc.timeline = tl;
+    render(); openDetalhe(currentId);
+    showToast('AD emitida: '+ad, 'success');
+  } catch(e) { showToast('Erro: '+e.message,'error'); }
+}
+
+async function addMovimentacao() {
+  const nota = document.getElementById('d-nota').value.trim();
+  const novoStatus = document.getElementById('d-novo-status').value;
+  const autor = (document.getElementById('d-autor').value||'Analista').trim();
+  if (!nota && !novoStatus) { showToast('Informe uma nota ou novo status','error'); return; }
+  const oc = ocorrencias.find(o=>o.id===currentId);
+  if (!oc) return;
+  const ts = new Date().toISOString();
+  const tl = [...(oc.timeline||[])];
+  if (nota) tl.push({ts, msg: nota, autor, cor: 'dot-blue'});
+  const changes = { timeline: tl };
+  if (novoStatus) { tl.push({ts, msg:`Status: ${STATUS_LABELS[oc.status]} → ${STATUS_LABELS[novoStatus]}.`, autor, cor: novoStatus==='resolvido'?'dot-green':'dot-gray'}); changes.status = novoStatus; }
+  try {
+    await updateOcorrencia(oc.id, changes);
+    Object.assign(oc, changes);
+    render(); openDetalhe(currentId);
+    showToast('Movimentação registrada', 'success');
+  } catch(e) { showToast('Erro: '+e.message,'error'); }
+}
+
+async function excluirOcorrencia() {
+  if (!confirm('Excluir permanentemente esta ocorrência?')) return;
+  try {
+    await deleteOcorrencia(currentId);
+    ocorrencias = ocorrencias.filter(o=>o.id!==currentId);
+    closeModal('modal-detalhe'); render();
+    showToast('Ocorrência excluída');
+  } catch(e) { showToast('Erro: '+e.message,'error'); }
+}
+
+function gerarEmailCliente() {
+  const oc = ocorrencias.find(o=>o.id===currentId);
+  if (!oc) return;
+  const pmap = {falta:'falta física de produto',defeito:'defeito no produto',avaria:'avaria no transporte',devolucao:'solicitação de devolução'};
+  const prazoMap = {falta:'2 dias úteis',defeito:'3 dias úteis',avaria:'2 dias úteis',devolucao:'2 dias úteis'};
+  const assunto = `Protocolo ${oc.protocolo} — ${TIPO_LABELS[oc.tipo]} | ${oc.razao_social}`;
+  const intro = oc.status==='resolvido'
+    ? `Temos o prazer de informar que a ocorrência referente ao ${pmap[oc.tipo]} foi encerrada com sucesso.`
+    : `Confirmamos o recebimento de sua reclamação referente ao ${pmap[oc.tipo]} e informamos que nossa equipe já está trabalhando na resolução.`;
+  const corpo = `Prezado(a) responsável,\n\n${intro}\n\nDetalhes:\n  Protocolo:       ${oc.protocolo}\n  Tipo:            ${TIPO_LABELS[oc.tipo]}\n  Produto(s):      ${oc.produto}\n  Pedido / NF:     ${oc.pedido} / ${oc.nf}\n  Status:          ${STATUS_LABELS[oc.status]}\n${oc.status!=='resolvido'?`\nPrazo de retorno: ${prazoMap[oc.tipo]} a partir desta data.`:`\nOcorrência encerrada com sucesso.`}\n\nQualquer dúvida, fale com seu vendedor: ${oc.vendedor}.\n\nAtenciosamente,\nEquipe Pós-Venda`;
+  document.getElementById('email-titulo').textContent='E-mail para o cliente';
+  document.getElementById('email-assunto').value=assunto;
+  document.getElementById('email-corpo').textContent=corpo;
+  closeModal('modal-detalhe'); openModal('modal-email');
+}
+
+function gerarEmailInterno() {
+  const oc = ocorrencias.find(o=>o.id===currentId);
+  if (!oc) return;
+  const p = prazoInfo(oc);
+  const assunto = `[OC] ${oc.protocolo} — ${TIPO_LABELS[oc.tipo]} — ${oc.razao_social} — ${STATUS_LABELS[oc.status]}`;
+  const corpo = `OCORRÊNCIA ABERTA — AÇÃO NECESSÁRIA\n${'─'.repeat(40)}\n\nProtocolo:   ${oc.protocolo}\nCliente:     ${oc.razao_social} (${oc.cnpj})\nTipo:        ${TIPO_LABELS[oc.tipo]}\nStatus:      ${STATUS_LABELS[oc.status]}\nPrazo:       ${p.label}\nVendedor:    ${oc.vendedor}\nPedido/NF:   ${oc.pedido} / ${oc.nf}\nProduto(s):  ${oc.produto}\nEvidências:  ${oc.evidencia||'—'}\n\nDESCRIÇÃO:\n${oc.descricao}\n\nAcesse o sistema e registre as ações tomadas.\n\nEquipe Pós-Venda`;
+  document.getElementById('email-titulo').textContent='E-mail interno';
+  document.getElementById('email-assunto').value=assunto;
+  document.getElementById('email-corpo').textContent=corpo;
+  closeModal('modal-detalhe'); openModal('modal-email');
+}
+
+function copiarEmail() {
+  const txt = 'Assunto: '+document.getElementById('email-assunto').value+'\n\n'+document.getElementById('email-corpo').textContent;
+  navigator.clipboard.writeText(txt).then(()=>showToast('Copiado!','success')).catch(()=>{ const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);showToast('Copiado!','success'); });
+}
+
+function goTo(id, btn) {
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(b=>b.classList.remove('active'));
+  document.getElementById('screen-'+id).classList.add('active');
+  btn.classList.add('active');
+}
+
+// Close modal on overlay click
+document.querySelectorAll('.modal-overlay').forEach(el=>{
+  el.addEventListener('click', e=>{ if(e.target===el) el.classList.remove('open'); });
+});
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') document.querySelectorAll('.modal-overlay.open').forEach(el=>el.classList.remove('open')); });
+
+// ─── BOOT ──────────────────────────────────────────────────
+loadOcorrencias();
+</script>
+</body>
+</html>
